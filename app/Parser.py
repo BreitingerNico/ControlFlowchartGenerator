@@ -31,7 +31,6 @@ class CFGBuilder(ast.NodeVisitor):
         if src is not None:
             self.edges.append((src, dst))
 
-    
     # entry
     def build(self, tree: ast.AST):
         entry = self.new_node("ENTRY")
@@ -40,52 +39,60 @@ class CFGBuilder(ast.NodeVisitor):
         self.visit(tree)
 
         exit_node = self.new_node("EXIT")
-        self.connect(self.current, exit_node)
+        if self.current is not None:
+            self.connect(self.current, exit_node)
+        else:
+            if self.nodes:
+                last_node = self.nodes[-2] 
+                self.connect(last_node, exit_node)
 
         return self.nodes, self.edges
     
-
     def visit_Module(self, node: ast.Module):
         for stmt in node.body:
             self.visit(stmt)
 
-    
-
-    def generic_statement(self, node, label):
-        stmt_node = self.new_node(label)
+    def generic_statement(self, node, label=None):
+        # if there's no label given, choose code instead
+        display_label = label if label else ast.unparse(node)
+        stmt_node = self.new_node(display_label)
         self.connect(self.current, stmt_node)
         self.current = stmt_node
 
     def visit_Assign(self, node: ast.Assign):
-        self.generic_statement(node, "Assign")
+        self.generic_statement(node)
+        
+    def visit_AugAssign(self, node: ast.AugAssign):
+        # for operations like 'index += 1'
+        self.generic_statement(node)
 
     def visit_Expr(self, node: ast.Expr):
-        self.generic_statement(node, "Expr")
+        self.generic_statement(node)
 
     def visit_Return(self, node: ast.Return):
-        return_node = self.new_node("Return")
+        display_label = f"return {ast.unparse(node.value)}" if node.value else "return"
+        return_node = self.new_node(display_label)
         self.connect(self.current, return_node)
-        self.current = None  # Return beendet den Kontrollfluss
+        self.current = return_node
 
     # ---------- IF ----------
 
     def visit_If(self, node: ast.If):
-        if_node = self.new_node("If")
+        condition_text = f"if {ast.unparse(node.test)}:"
+        if_node = self.new_node(condition_text)
         self.connect(self.current, if_node)
-
-        # THEN
+        
         self.current = if_node
         for stmt in node.body:
             self.visit(stmt)
         then_end = self.current
 
-        # ELSE
         self.current = if_node
         for stmt in node.orelse:
             self.visit(stmt)
         else_end = self.current
 
-        # MERGE
+        """
         merge = self.new_node("Merge")
 
         if then_end:
@@ -93,15 +100,16 @@ class CFGBuilder(ast.NodeVisitor):
         if else_end:
             self.connect(else_end, merge)
 
-        self.current = merge
+        self.current = merge """
 
     # ---------- WHILE ----------
-
     def visit_While(self, node: ast.While):
-        while_node = self.new_node("While")
+        # Bedingung extrahieren, z.B. "while x < 10:"
+        condition_text = f"while {ast.unparse(node.test)}:"
+        while_node = self.new_node(condition_text)
         self.connect(self.current, while_node)
 
-        loop_exit = self.new_node("LoopExit")
+        loop_exit = self.new_node(f"End {condition_text}")
         self.loop_stack.append(loop_exit)
 
         # Body
@@ -109,87 +117,62 @@ class CFGBuilder(ast.NodeVisitor):
         for stmt in node.body:
             self.visit(stmt)
 
-        # Rückkante
+        # Rückkante zur Bedingung
         if self.current:
             self.connect(self.current, while_node)
 
-        # False-Kante
+        # Exit-Kante (wenn Bedingung falsch ist)
         self.connect(while_node, loop_exit)
-
         self.loop_stack.pop()
         self.current = loop_exit
 
-    
+    # ---------- FOR ----------
     def visit_For(self, node: ast.For):
-        for_node = self.new_node("For")
+        # Wichtig: "for " am Anfang für die Erkennung im Builder
+        for_text = f"for {ast.unparse(node.target)} in {ast.unparse(node.iter)}:"
+        for_node = self.new_node(for_text)
         self.connect(self.current, for_node)
 
-        # Exit-Knoten für break
-        loop_exit = self.new_node("ForExit")
+        loop_exit = self.new_node(f"End {for_text}")
         self.loop_stack.append(loop_exit)
 
-        # Schleifenrumpf
         self.current = for_node
         for stmt in node.body:
             self.visit(stmt)
 
-        # Rückkante (nächste Iteration)
         if self.current:
             self.connect(self.current, for_node)
 
-        # Schleife verlassen
         self.connect(for_node, loop_exit)
-
         self.loop_stack.pop()
         self.current = loop_exit
 
-
-    # ---------- BREAK / CONTINUE ----------
-
-    def visit_Break(self, node: ast.Break):
-        break_node = self.new_node("Break")
-        self.connect(self.current, break_node)
-        self.connect(break_node, self.loop_stack[-1])
-        self.current = None
-
-    def visit_Continue(self, node: ast.Continue):
-        continue_node = self.new_node("Continue")
-        self.connect(self.current, continue_node)
-        self.connect(continue_node, self.loop_stack[-1])
-        self.current = None
-
+    # ---------- TRY / EXCEPT / FINALLY ----------
     def visit_Try(self, node: ast.Try):
-        try_node = self.new_node("Try")
+        try_node = self.new_node("try:")
         self.connect(self.current, try_node)
+        
+        finally_node = self.new_node("finally:")
 
-        finally_node = self.new_node("Finally")
-
-       # try block
         self.current = try_node
         for stmt in node.body:
             self.visit(stmt)
+        if self.current:
+            self.connect(self.current, finally_node)
 
-        normal_end = self.current
-        if normal_end:
-            self.connect(normal_end, finally_node)
-
-       # except block
         for handler in node.handlers:
-            except_node = self.new_node("Except")
+            exc_label = "except"
+            if handler.type:
+                exc_label += f" {ast.unparse(handler.type)}"
+            except_node = self.new_node(f"{exc_label}:")
             self.connect(try_node, except_node)
 
             self.current = except_node
             for stmt in handler.body:
                 self.visit(stmt)
+            if self.current:
+                self.connect(self.current, finally_node)
 
-            except_end = self.current
-            if except_end:
-                self.connect(except_end, finally_node)
-
-       #finally block
         self.current = finally_node
         for stmt in node.finalbody:
             self.visit(stmt)
-
-        #continue after finally
-        self.current = finally_node
