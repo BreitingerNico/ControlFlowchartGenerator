@@ -1,7 +1,7 @@
 import ast
 import sys
 import os
-from Parser import CFGBuilder
+from app.Visitor import CFGBuilder
 from CfgBuilder import CfgDiagrammBuilder
 
 def get_input_code():
