@@ -40,8 +40,8 @@ def main():
         tree = ast.parse(source)
         
         # 2. Extract nodes and edges for the Control Flow Graph
-        parser = CFGBuilder()
-        nodes, edges = parser.build(tree)
+        visitor = CFGBuilder()
+        nodes, edges = visitor.build(tree)
 
         # 3. Create the visual graph representation
         diagram_builder = CfgDiagrammBuilder()
