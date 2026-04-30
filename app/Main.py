@@ -12,7 +12,6 @@ def get_input_code():
     
     user_input = input("\nInput: ").strip()
 
-    # Check if input is a valid file path
     if os.path.isfile(user_input):
         try:
             with open(user_input, "r", encoding="utf-8") as f:
@@ -21,7 +20,6 @@ def get_input_code():
             print(f"Error reading file: {e}")
             return None
     else:
-        # Multi-line input mode
         print("Direct mode: Paste your code (type 'EOF' to confirm):")
         lines = [user_input]
         while True:
@@ -38,21 +36,23 @@ def main():
         return
 
     try:
-        # Validate syntax
+        # 1. Parse the source code into an AST
         tree = ast.parse(source)
         
-        # Build logical structure
+        # 2. Extract nodes and edges for the Control Flow Graph
         parser = CFGBuilder()
         nodes, edges = parser.build(tree)
 
-        # Generate visualization
+        # 3. Create the visual graph representation
         diagram_builder = CfgDiagrammBuilder()
         graph = diagram_builder.createGraph(nodes, edges)
 
-        # Render and save
+        # 4. Render and save - view=False is critical for Docker/Headless environments
         output_file = "cfg_output"
-        graph.render("cfg_output", format="png", cleanup=True, view=False)
-        print(f"\nSuccess! Diagram saved as '{output_file}.png'.")
+        # We set view=False to prevent crashes in environments without a display
+        graph.render(output_file, format="png", cleanup=True, view=False)
+        
+        print(f"\nSuccess! Diagram saved as '{output_file}.png' in your project folder.")
         
     except SyntaxError as e:
         print(f"\n[SYNTAX ERROR]: Line {e.lineno}: {e.msg}")

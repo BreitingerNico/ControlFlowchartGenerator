@@ -1,8 +1,3 @@
-"""
-example code to test the control flowchart generator 
-with various constructs like loops, conditionals, try-except, and more. (AI-generated)
-"""
-
 def komplexer_test_lauf(werte_liste):
     ergebnis = 0
     zaehler = 0

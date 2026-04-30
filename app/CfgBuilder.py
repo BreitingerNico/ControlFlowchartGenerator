@@ -40,7 +40,7 @@ class CfgDiagrammBuilder:
         return self.dot
 
     def _determine_shape(self, label):
-        label_lower = label.lower().strip() # strip() entfernt führende Leerzeichen
+        label_lower = label.lower().strip() 
         
         # Erweiterte Prüfung für Kontrollfluss-Keywords
         if label_lower.startswith(("if ", "while ", "for ", "try", "except")):
